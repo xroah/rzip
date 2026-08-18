@@ -1,0 +1,10 @@
+[package]
+name = "rzip"
+version = "0.1.0"
+edition = "2024"
+description = "A simple command line tool to compress and decompress zip files"
+
+[dependencies]
+zip = { version = "8.6.0", features = ["deflate", "aes-crypto"] }
+home = "0.5.12"
+clap = { version = "4.6.6", features = ["derive"] }
