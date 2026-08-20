@@ -1,5 +1,7 @@
 
 mod cmd;
+mod error;
+mod archive;
 
 fn main() {
     let Some(home_dir) = home::home_dir() else {
@@ -10,5 +12,5 @@ fn main() {
     };
     println!("Home: {}", home_str);
 
-    cmd::greet();
+    cmd::create_cmd();
 }
