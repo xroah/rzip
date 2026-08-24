@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashMap},
     env,
     error::Error,
     fs::File,
@@ -36,7 +36,10 @@ pub struct ArchiveNode {
     pub children: BTreeMap<String, ArchiveNode>,
 }
 
-pub fn get_zip_structure(file_path: PathBuf) -> Result<ArchiveNode, Box<dyn Error>> {
+pub fn get_zip_structure(
+    file_path: PathBuf,
+    target_path: Option<Vec<PathBuf>>,
+) -> Result<(ArchiveNode, HashMap<String, bool>), Box<dyn Error>> {
     let Some(abs_path) = get_abs_path(file_path.clone()) else {
         return Err(Box::new(ZipError::FileNotFound(file_path)));
     };
@@ -51,10 +54,27 @@ pub fn get_zip_structure(file_path: PathBuf) -> Result<ArchiveNode, Box<dyn Erro
     let file = File::open(abs_path)?;
     let mut zip_file: ZipArchive<File> = ZipArchive::new(file)?;
     let len = zip_file.len();
+    let mut path_map: HashMap<String, bool> = HashMap::new();
+    let mut target_paths = vec![];
+
+    if let Some(paths) = target_path {
+        target_paths = paths;
+
+        for p in &target_paths {
+            path_map.insert(p.to_str().unwrap().trim_start_matches("/").to_string(), false);
+        }
+    }
 
     for i in 0..len {
         let f = zip_file.by_index(i)?;
-        let p = Path::new(f.name().trim_end_matches("/"));
+        let n = f.name().trim_end_matches("/");
+        let p = Path::new(n);
+        let has_target = path_map.get(n);
+
+        if let Some(_) = has_target {
+            path_map.insert(n.to_string(), true);
+        }
+
         let components: Vec<_> = p
             .components()
             .filter_map(|c| match c {
@@ -90,7 +110,7 @@ pub fn get_zip_structure(file_path: PathBuf) -> Result<ArchiveNode, Box<dyn Erro
         }
     }
 
-    Ok(root)
+    Ok((root, path_map))
 }
 
 fn format_date_time(dt: Option<DateTime>) -> Option<String> {

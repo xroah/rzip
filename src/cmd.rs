@@ -1,11 +1,31 @@
 use clap::{Args as ClapArgs, Parser, Subcommand};
-use std::{env, path::PathBuf};
+use std::path::PathBuf;
 
 mod add;
 mod del;
 mod ls;
-mod open;
 mod unzip;
+
+macro_rules! common_args {
+    (
+        $(#[$meta: meta])*
+        $name:ident {
+            $($(#[$field_meta: meta])*
+            $field_name:ident : $field_type:ty),* $(,)?
+        }
+    ) => {
+        $(#[$meta])*
+        struct $name {
+            file: PathBuf,
+            #[arg(short)]
+            password: Option<String>,
+             $(
+                $(#[$field_meta])*
+                $field_name : $field_type
+            ),*
+        }
+    };
+}
 
 /// Simple program to greet a person
 #[derive(Parser, Debug)]
@@ -22,6 +42,7 @@ struct Args {
 
 #[derive(ClapArgs, Debug)]
 struct DelOrAddArgs {
+    #[arg(num_args=1..)]
     files: Vec<PathBuf>,
     #[arg(short)]
     target: PathBuf,
@@ -29,25 +50,34 @@ struct DelOrAddArgs {
     password: Option<String>,
 }
 
+#[derive(ClapArgs, Debug)]
+struct LsArgs {
+    file: PathBuf,
+    #[arg(short, default_value_t = false)]
+    recursive: bool,
+    #[arg[short, num_args=0..]]
+    path: Option<Vec<PathBuf>>,
+}
+
+common_args!(
+    #[derive(ClapArgs, Debug)]
+    UnzipArgs {
+        output: Option<PathBuf>,
+    }
+);
+
 #[derive(Subcommand, Debug)]
 enum Commands {
     Unzip {
-        files: Vec<PathBuf>,
-        #[arg(short)]
-        password: Option<String>,
-    },
-    Open {
         file: PathBuf,
         #[arg(short)]
         password: Option<String>,
+        #[arg(short)]
+        output: Option<String>,
     },
     Add(DelOrAddArgs),
     Del(DelOrAddArgs),
-    Ls {
-        files: Vec<PathBuf>,
-        #[arg(short, default_value_t = false)]
-        recursive: bool,
-    },
+    Ls(LsArgs),
 }
 
 pub fn create_cmd() {
@@ -72,19 +102,18 @@ pub fn create_cmd() {
                     target,
                     password,
                 }) => {}
-                Commands::Ls { files, recursive } => {
-                    let _ = ls::list(files, recursive);
+                Commands::Ls(args) => {
+                    let _ = ls::list(args);
                 }
-                Commands::Open { file, password } => {}
-                Commands::Unzip { files, password } => {}
+                Commands::Unzip {
+                    file,
+                    password,
+                    output,
+                } => {}
             }
         }
         None => {
             println!("No command provided.");
         }
-    }
-
-    if let Ok(current_dir) = env::current_dir() {
-        println!("Current directory: {:?}", current_dir)
     }
 }
