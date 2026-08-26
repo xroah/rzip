@@ -1,5 +1,5 @@
 use clap::{Args as ClapArgs, Parser, Subcommand};
-use std::path::PathBuf;
+use std::{error::Error, path::PathBuf};
 
 mod add;
 mod del;
@@ -17,7 +17,7 @@ macro_rules! common_args {
         $(#[$meta])*
         struct $name {
             file: PathBuf,
-            #[arg(short)]
+            #[arg(short, long)]
             password: Option<String>,
              $(
                 $(#[$field_meta])*
@@ -33,8 +33,17 @@ macro_rules! common_args {
 #[command(version)]
 struct Args {
     files: Vec<PathBuf>,
-    #[arg(short)]
+    #[arg(short, long)]
     password: Option<String>,
+    #[arg(short, long)]
+    output: Option<PathBuf>,
+    #[arg(
+        short,
+        long,
+        help = "Keep original path or not if specified files include glob patterns",
+        default_value_t = false
+    )]
+    keep: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -44,37 +53,32 @@ struct Args {
 struct DelOrAddArgs {
     #[arg(num_args=1..)]
     files: Vec<PathBuf>,
-    #[arg(short)]
+    #[arg(short, long)]
     target: PathBuf,
-    #[arg(short)]
+    #[arg(short, long)]
     password: Option<String>,
 }
 
 #[derive(ClapArgs, Debug)]
 struct LsArgs {
     file: PathBuf,
-    #[arg(short, default_value_t = false)]
+    #[arg(short, long, default_value_t = false)]
     recursive: bool,
-    #[arg[short, num_args=0..]]
+    #[arg[short, long, num_args=0..]]
     path: Option<Vec<PathBuf>>,
 }
 
 common_args!(
     #[derive(ClapArgs, Debug)]
     UnzipArgs {
+        #[arg(short, long)]
         output: Option<PathBuf>,
     }
 );
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    Unzip {
-        file: PathBuf,
-        #[arg(short)]
-        password: Option<String>,
-        #[arg(short)]
-        output: Option<String>,
-    },
+    Unzip(UnzipArgs),
     Add(DelOrAddArgs),
     Del(DelOrAddArgs),
     Ls(LsArgs),
@@ -82,38 +86,31 @@ enum Commands {
 
 pub fn create_cmd() {
     let args = Args::parse();
-
-    for f in &args.files {
-        println!("File: {}", f.to_str().unwrap_or("None"))
-    }
+    let mut ret: Result<(), Box<dyn Error>> = Ok(());
 
     match args.command {
         Some(cmd) => {
             println!("Command: {:?}", cmd);
 
             match cmd {
-                Commands::Add(DelOrAddArgs {
-                    files,
-                    target,
-                    password,
-                }) => {}
-                Commands::Del(DelOrAddArgs {
-                    files,
-                    target,
-                    password,
-                }) => {}
-                Commands::Ls(args) => {
-                    let _ = ls::list(args);
+                Commands::Add(args) => {}
+                Commands::Del(args) => {
+                    ret = del::delete(args);
                 }
-                Commands::Unzip {
-                    file,
-                    password,
-                    output,
-                } => {}
+                Commands::Ls(args) => {
+                    ret = ls::list(args);
+                }
+                Commands::Unzip(args) => {
+                    ret = unzip::extract(args);
+                }
             }
         }
         None => {
             println!("No command provided.");
         }
+    }
+
+    if let Err(err) = ret {
+        println!("{err:?}");
     }
 }

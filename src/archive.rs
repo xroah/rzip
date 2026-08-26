@@ -17,9 +17,7 @@ trait PadLeadingZero {
 impl PadLeadingZero for u8 {
     fn pad_leading_zero(self) -> String {
         if self < 10 {
-            let s = (100 + self).to_string();
-
-            s.chars().skip(1).collect()
+            format!("0{}", self)
         } else {
             self.to_string()
         }
