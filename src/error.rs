@@ -3,6 +3,7 @@ use std::{error::Error, fmt::Display, path::PathBuf};
 #[derive(Debug)]
 pub enum ZipError {
     FileNotFound(PathBuf),
+    FileExist(PathBuf)
 }
 
 impl Display for ZipError {
@@ -10,7 +11,10 @@ impl Display for ZipError {
         match self {
             Self::FileNotFound(file_path) => {
                 write!(f, "{:?} can not be found", file_path)
-            }
+            },
+            Self::FileExist(file_path) => {
+                write!(f, "{:?} already exists", file_path)
+            },
         }
     }
 }

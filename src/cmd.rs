@@ -5,6 +5,7 @@ mod add;
 mod del;
 mod ls;
 mod unzip;
+mod zip;
 
 macro_rules! common_args {
     (
@@ -38,12 +39,13 @@ struct Args {
     #[arg(short, long)]
     output: Option<PathBuf>,
     #[arg(
-        short,
         long,
-        help = "Keep original path or not if specified files include glob patterns",
+        help = "Include the directory itself when compressing a directory",
         default_value_t = false
     )]
-    keep: bool,
+    dir: bool,
+    #[arg(short = 'w', long, default_value_t = false)]
+    overwrite: bool,
 
     #[command(subcommand)]
     command: Option<Commands>,
@@ -106,7 +108,7 @@ pub fn create_cmd() {
             }
         }
         None => {
-            println!("No command provided.");
+            ret = zip::compress(args);
         }
     }
 
