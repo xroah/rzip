@@ -104,7 +104,7 @@ fn format_date_time(dt: Option<DateTime>) -> Option<String> {
     ))
 }
 
-pub fn get_zip_json_structure(zip_file: PathBuf) -> Result<String, Box<dyn Error>>{
+pub fn get_zip_json_structure(zip_file: PathBuf) -> Result<String, Box<dyn Error>> {
     let structure = get_zip_structure(zip_file)?;
     let ret = serde_json::to_string(&structure)?;
 
