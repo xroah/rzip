@@ -24,28 +24,30 @@ impl PadLeadingZero for u8 {
     }
 }
 
+type RefCellNode = RefCell<ArchiveNode>;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ArchiveNode {
     pub name: String,
     pub is_dir: bool,
     pub last_modified: String,
-    pub size: RefCell<u64>,
-    pub compressed_size: RefCell<u64>,
-    pub children: RefCell<HashMap<String, Rc<ArchiveNode>>>,
+    pub size: u64,
+    pub compressed_size: u64,
+    pub children: HashMap<String, Rc<RefCellNode>>,
     #[serde(skip_serializing)]
-    pub parent: RefCell<Weak<ArchiveNode>>,
+    pub parent: Weak<RefCellNode>,
 }
 
-pub fn get_zip_structure(file_path: PathBuf) -> Result<Rc<ArchiveNode>, Box<dyn Error>> {
-    let root = Rc::new(ArchiveNode {
+pub fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn Error>> {
+    let root = Rc::new(RefCell::new(ArchiveNode {
         name: String::from("root"),
         is_dir: true,
         last_modified: String::new(),
-        size: RefCell::new(0),
-        compressed_size: RefCell::new(0),
-        children: RefCell::new(HashMap::new()),
-        parent: RefCell::new(Weak::new()),
-    });
+        size: 0,
+        compressed_size: 0,
+        children: HashMap::new(),
+        parent: Weak::new(),
+    }));
     let file = File::open(file_path)?;
     let mut zip_file: ZipArchive<File> = ZipArchive::new(file)?;
     let len = zip_file.len();
@@ -69,30 +71,31 @@ pub fn get_zip_structure(file_path: PathBuf) -> Result<Rc<ArchiveNode>, Box<dyn 
         let last_modified = f.last_modified();
 
         for c in components {
-            let rc_node = Rc::new(ArchiveNode {
+            let rc_node = Rc::new(RefCell::new(ArchiveNode {
                 name: c.to_string(),
                 is_dir: is_dir,
                 last_modified: format_date_time(last_modified),
-                size: RefCell::new(if !is_dir { size } else { 0 }),
-                compressed_size: RefCell::new(if !is_dir { compressed_size } else { 0 }),
-                children: RefCell::new(HashMap::new()),
-                parent: RefCell::new(Weak::new()),
-            });
-            let parent = Rc::downgrade(&current_node);
-            *rc_node.parent.borrow_mut() = parent;
-
-            if let Some(p) = rc_node.parent.borrow().upgrade() {
-                *p.size.borrow_mut() += size;
-                *p.compressed_size.borrow_mut() += compressed_size;
-            }
+                size: if !is_dir { size } else { 0 },
+                compressed_size: if !is_dir { compressed_size } else { 0 },
+                children: HashMap::new(),
+                parent: Rc::downgrade(&current_node),
+            }));
 
             let children = current_node
-                .children
                 .borrow_mut()
+                .children
                 .entry(c.to_string())
-                .or_insert(rc_node)
+                .or_insert(rc_node.clone())
                 .clone();
+            let parent = children.borrow_mut().parent.upgrade();
             current_node = children;
+
+            if let Some(p) = parent {
+                let mut p = p.borrow_mut();
+
+                p.size += size;
+                p.compressed_size += compressed_size;
+            }
         }
     }
 
