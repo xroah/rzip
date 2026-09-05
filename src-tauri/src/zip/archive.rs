@@ -80,19 +80,18 @@ pub fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn 
                 children: HashMap::new(),
                 parent: Rc::downgrade(&current_node),
             }));
-
             let children = current_node
                 .borrow_mut()
                 .children
                 .entry(c.to_string())
-                .or_insert(rc_node.clone())
+                .or_insert(rc_node)
                 .clone();
+
             let parent = children.borrow_mut().parent.upgrade();
             current_node = children;
 
             if let Some(p) = parent {
                 let mut p = p.borrow_mut();
-
                 p.size += size;
                 p.compressed_size += compressed_size;
             }

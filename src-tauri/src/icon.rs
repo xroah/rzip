@@ -24,18 +24,18 @@ pub fn get_icon_manifest() -> Manifest {
     };
 
     if let Ok(ret) = ret {
-        for (idx, file_icon) in ret.iter().enumerate() {
+        for (idx, file_icon) in ret.into_iter().enumerate() {
             let code = idx as u16;
 
-            manifest.code_map.insert(code, file_icon.name.clone());
+            manifest.code_map.insert(code, file_icon.name);
 
-            for ext in &file_icon.exts {
-                manifest.icon_map.insert(ext.clone(), code);
+            for ext in file_icon.exts {
+                manifest.icon_map.insert(ext, code);
             }
 
-            if let Some(file_names) = &file_icon.file_names {
+            if let Some(file_names) = file_icon.file_names {
                 for file_name in file_names {
-                    manifest.icon_map.insert(file_name.clone(), code);
+                    manifest.icon_map.insert(file_name, code);
                 }
             }
         }
