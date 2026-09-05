@@ -20,7 +20,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             js_api::get_zip_json,
-            js_api::get_file_ext,
             js_api::get_icon_manifest
         ])
         .run(tauri::generate_context!())

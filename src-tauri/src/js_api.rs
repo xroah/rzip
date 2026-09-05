@@ -14,16 +14,6 @@ pub fn get_zip_json(file: String) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn get_file_ext(file: String) -> String {
-    let p = PathBuf::from(&file);
-
-    match p.extension() {
-        Some(ext) => ext.to_str().unwrap().to_string(),
-        None => String::new(),
-    }
-}
-
-#[tauri::command]
 pub fn get_icon_manifest() -> icon::Manifest {
     icon::get_icon_manifest()
 }

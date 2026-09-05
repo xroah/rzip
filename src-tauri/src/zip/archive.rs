@@ -24,30 +24,47 @@ impl PadLeadingZero for u8 {
     }
 }
 
+impl Default for ArchiveNode {
+    fn default() -> Self {
+        Self {
+            name: Default::default(),
+            is_dir: true,
+            last_modified: Default::default(),
+            size: 0,
+            compressed_size: 0,
+            children: HashMap::new(),
+            parent: Weak::new(),
+            ext: Default::default(),
+        }
+    }
+}
+
+impl ArchiveNode {
+    fn from_name(name: &str) -> Self {
+        let mut ret = Self::default();
+        ret.name = String::from(name);
+
+        ret
+    }
+}
+
 type RefCellNode = RefCell<ArchiveNode>;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ArchiveNode {
     pub name: String,
     pub is_dir: bool,
-    pub last_modified: String,
+    pub last_modified: Option<String>,
     pub size: u64,
     pub compressed_size: u64,
     pub children: HashMap<String, Rc<RefCellNode>>,
     #[serde(skip_serializing)]
     pub parent: Weak<RefCellNode>,
+    pub ext: Option<String>,
 }
 
 pub fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn Error>> {
-    let root = Rc::new(RefCell::new(ArchiveNode {
-        name: String::from("root"),
-        is_dir: true,
-        last_modified: String::new(),
-        size: 0,
-        compressed_size: 0,
-        children: HashMap::new(),
-        parent: Weak::new(),
-    }));
+    let root = Rc::new(RefCell::new(ArchiveNode::from_name("root")));
     let file = File::open(file_path)?;
     let mut zip_file: ZipArchive<File> = ZipArchive::new(file)?;
     let len = zip_file.len();
@@ -71,22 +88,20 @@ pub fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn 
         let last_modified = f.last_modified();
 
         for c in components {
-            let rc_node = Rc::new(RefCell::new(ArchiveNode {
-                name: c.to_string(),
-                is_dir: is_dir,
-                last_modified: format_date_time(last_modified),
-                size: if !is_dir { size } else { 0 },
-                compressed_size: if !is_dir { compressed_size } else { 0 },
-                children: HashMap::new(),
-                parent: Rc::downgrade(&current_node),
-            }));
+            let mut node = ArchiveNode::from_name(c);
+            node.is_dir = is_dir;
+            node.size = if is_dir { 0 } else { size };
+            node.compressed_size = if is_dir { 0 } else { compressed_size };
+            node.last_modified = format_date_time(last_modified);
+            node.ext = if is_dir { None } else { get_file_ext(p) };
+            node.parent = Rc::downgrade(&current_node);
+            let rc_node = Rc::new(RefCell::new(node));
             let children = current_node
                 .borrow_mut()
                 .children
                 .entry(c.to_string())
                 .or_insert(rc_node)
                 .clone();
-
             let parent = children.borrow_mut().parent.upgrade();
             current_node = children;
 
@@ -101,12 +116,12 @@ pub fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn 
     Ok(root)
 }
 
-fn format_date_time(dt: Option<DateTime>) -> String {
+fn format_date_time(dt: Option<DateTime>) -> Option<String> {
     let Some(dt) = dt else {
-        return String::new();
+        return None;
     };
 
-    format!(
+    Some(format!(
         "{}-{}-{} {}:{}:{}",
         dt.year(),
         dt.month().pad_leading_zero(),
@@ -114,7 +129,18 @@ fn format_date_time(dt: Option<DateTime>) -> String {
         dt.hour().pad_leading_zero(),
         dt.minute().pad_leading_zero(),
         dt.second().pad_leading_zero()
-    )
+    ))
+}
+
+fn get_file_ext(path: &Path) -> Option<String> {
+    let Some(ext) = path.extension() else {
+        return None;
+    };
+    let Some(ext) = ext.to_str() else {
+        return None;
+    };
+
+    Some(String::from(ext))
 }
 
 pub fn get_zip_json_structure(zip_file: PathBuf) -> Result<String, Box<dyn Error>> {
