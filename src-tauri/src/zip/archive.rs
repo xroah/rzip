@@ -30,10 +30,10 @@ impl Default for ArchiveNode {
             name: Default::default(),
             is_dir: true,
             last_modified: Default::default(),
-            size: 0,
-            compressed_size: 0,
+            size: Default::default(),
+            compressed_size: Default::default(),
             children: HashMap::new(),
-            parent: Weak::new(),
+            parent: Default::default(),
             ext: Default::default(),
         }
     }
@@ -51,19 +51,19 @@ impl ArchiveNode {
 type RefCellNode = RefCell<ArchiveNode>;
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct ArchiveNode {
-    pub name: String,
-    pub is_dir: bool,
-    pub last_modified: Option<String>,
-    pub size: u64,
-    pub compressed_size: u64,
-    pub children: HashMap<String, Rc<RefCellNode>>,
+struct ArchiveNode {
+    name: String,
+    is_dir: bool,
+    last_modified: Option<String>,
+    size: u64,
+    compressed_size: u64,
+    children: HashMap<String, Rc<RefCellNode>>,
     #[serde(skip_serializing)]
-    pub parent: Weak<RefCellNode>,
-    pub ext: Option<String>,
+    parent: Weak<RefCellNode>,
+    ext: Option<String>,
 }
 
-pub fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn Error>> {
+fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn Error>> {
     let root = Rc::new(RefCell::new(ArchiveNode::from_name("root")));
     let file = File::open(file_path)?;
     let mut zip_file: ZipArchive<File> = ZipArchive::new(file)?;
@@ -90,10 +90,14 @@ pub fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn 
         for c in components {
             let mut node = ArchiveNode::from_name(c);
             node.is_dir = is_dir;
-            node.size = if is_dir { 0 } else { size };
-            node.compressed_size = if is_dir { 0 } else { compressed_size };
             node.last_modified = format_date_time(last_modified);
-            node.ext = if is_dir { None } else { get_file_ext(p) };
+
+            if !is_dir {
+                node.size = size;
+                node.compressed_size = compressed_size;
+                node.ext = get_file_ext(p);
+            }
+
             node.parent = Rc::downgrade(&current_node);
             let rc_node = Rc::new(RefCell::new(node));
             let children = current_node
@@ -143,7 +147,7 @@ fn get_file_ext(path: &Path) -> Option<String> {
     Some(String::from(ext))
 }
 
-pub fn get_zip_json_structure(zip_file: PathBuf) -> Result<String, Box<dyn Error>> {
+pub fn get_json(zip_file: PathBuf) -> Result<String, Box<dyn Error>> {
     let structure = get_zip_structure(zip_file)?;
     let ret = serde_json::to_string(&structure)?;
 

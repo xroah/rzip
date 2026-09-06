@@ -5,7 +5,7 @@ use crate::{icon, zip};
 #[tauri::command]
 pub fn get_zip_json(file: String) -> Result<String, String> {
     let file_path = PathBuf::from(file);
-    let ret = zip::archive::get_zip_json_structure(file_path);
+    let ret = zip::archive::get_json(file_path);
 
     match ret {
         Ok(json) => Ok(json),
