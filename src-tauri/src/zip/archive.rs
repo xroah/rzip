@@ -86,13 +86,17 @@ fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn Erro
         let size = f.size();
         let compressed_size = f.compressed_size();
         let last_modified = f.last_modified();
+        let len = components.len();
 
-        for c in components {
+        for (idx, c) in components.into_iter().enumerate() {
             let mut node = ArchiveNode::from_name(c);
-            node.is_dir = is_dir;
+            // for handling folders like __MACOSX
+            let is_last = idx == len - 1; 
+            let is_file = is_last && !is_dir;
+            node.is_dir = !is_last || is_dir;
             node.last_modified = format_date_time(last_modified);
 
-            if !is_dir {
+            if is_file {
                 node.size = size;
                 node.compressed_size = compressed_size;
                 node.ext = get_file_ext(p);

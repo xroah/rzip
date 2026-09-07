@@ -1,0 +1,27 @@
+.zip-list {
+    padding: 10px;
+    cursor: default;
+
+    li {
+        display: flex;
+
+        > div {
+            width: 25%;
+            -webkit-user-select: none;
+            user-select: none;
+        }
+    }
+
+    .zip-item {
+        padding: 5px 0;
+
+        &:hover {
+            background-color: #eee;
+        }
+    }
+
+    .file-name {
+        display: flex;
+        align-items: center;
+    }
+}

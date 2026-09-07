@@ -25,7 +25,7 @@ pub fn get_icon_manifest() -> Manifest {
 
     if let Ok(ret) = ret {
         for (idx, file_icon) in ret.into_iter().enumerate() {
-            let code = idx as u16;
+            let code = (idx + 1) as u16;
 
             manifest.code_map.insert(code, file_icon.name);
 

@@ -25,6 +25,8 @@ export default defineConfig([
     stylistic.configs.recommended,
     {
         rules: {
+            "no-unused-vars": [1],
+            "@typescript/no-unused-vars": [1],
             "@stylistic/indent": [1, 4],
             "@stylistic/quotes": [1, "double"],
             "@stylistic/comma-dangle": "off",
