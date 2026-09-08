@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, MouseEvent } from "react"
 import { Event, listen, TauriEvent } from "@tauri-apps/api/event"
 import { invoke } from "@tauri-apps/api/core"
+import BackArrow from "./icons/backArrow"
 
 interface Payload {
     paths: string[]
@@ -14,6 +15,7 @@ interface ArchiveNode {
     compressed_size: number
     ext?: string
     children: Record<string, ArchiveNode>
+    full_path: string
 }
 
 interface Zip {
@@ -23,8 +25,10 @@ interface Zip {
     size: string
     compressedSize: string
     icon?: string
-    children?: Zip[]
-    key: number
+    children: Zip[]
+    id: number
+    parent?: Zip
+    path: string
 }
 
 type IconCodeMap = Record<number, string>
@@ -54,33 +58,50 @@ function formatSize(s: number) {
     return ret + units[i]
 }
 
-let key = 0
+let id = 100
 
 function getIcon(
     { icon_map, code_map }: Manifest,
-    { ext, is_dir, name }: ArchiveNode,
+    { ext, name, is_dir }: ArchiveNode,
 ) {
-    let defaultIcon = is_dir ? "folder" : "file"
+    if (is_dir) {
+        return
+    }
+
     let icon = icon_map[name]
 
     if (!icon && ext) {
         icon = icon_map[ext]
     }
 
-    return icon ? code_map[icon] || defaultIcon : defaultIcon
+    return icon ? code_map[icon] : undefined
 }
 
-async function format(archiveNode: ArchiveNode, cb: (zip: Zip[]) => void) {
-    let manifest = (await invoke("get_icon_manifest")) as Manifest
+function sort(zip1: Zip, zip2: Zip) {
+    return zip1.name > zip2.name ? 1 : zip1.name < zip2.name ? -1 : 0
+}
 
-    let ret: Zip[] = []
-    const fmt = (an: typeof archiveNode.children) => {
+async function format(archiveNode: ArchiveNode, cb: (zip: Zip) => void) {
+    let manifest = (await invoke("get_icon_manifest")) as Manifest
+    let ret: Zip = {
+        name: "root",
+        isDir: true,
+        size: "",
+        compressedSize: "",
+        icon: "",
+        modified: "",
+        id: 0,
+        children: [],
+        path: "/",
+    }
+    const fmt = (an: ArchiveNode, parent?: Zip) => {
         let folders: Zip[] = []
         let files: Zip[] = []
-        let keys = Object.keys(an)
+        let children = an.children
+        let keys = Object.keys(children)
 
         for (let k of keys) {
-            let node = an[k]
+            let node = children[k]
             let zipNode: Zip = {
                 name: node.name,
                 isDir: true,
@@ -88,12 +109,15 @@ async function format(archiveNode: ArchiveNode, cb: (zip: Zip[]) => void) {
                 compressedSize: formatSize(node.compressed_size),
                 icon: getIcon(manifest, node),
                 modified: node.last_modified,
-                key: key++,
+                id: id++,
+                children: [],
+                parent,
+                path: node.full_path,
             }
 
             if (node.is_dir) {
                 folders.push(zipNode)
-                zipNode.children = fmt(node.children)
+                zipNode.children = fmt(node, zipNode)
             } else {
                 zipNode.isDir = false
 
@@ -101,31 +125,51 @@ async function format(archiveNode: ArchiveNode, cb: (zip: Zip[]) => void) {
             }
         }
 
-        return [...folders, ...files]
+        return [...folders.sort(sort), ...files.sort(sort)]
     }
 
-    ret = fmt(archiveNode.children)
+    ret.children = fmt(archiveNode, ret)
 
     cb(ret)
     console.log(ret)
 }
 
 export default function ZipList() {
-    const [zipList, setZipList] = useState<Zip[]>([])
-    const [stack, setStack] = useState<Zip[][]>([])
-    const handleClick = (zip: Zip) => {}
+    const [zip, setZip] = useState<Zip>()
+    const [stack, setStack] = useState<Zip[]>([])
+    const [selected, setSelected] = useState<Set<number>>(new Set())
+    const handleClick = (e: MouseEvent, zip: Zip) => {
+        setSelected(s => {
+            if (!e.ctrlKey) {
+                return new Set([zip.id])
+            }
+
+            let newSet = new Set(s)
+
+            if (newSet.has(zip.id)) {
+                newSet.delete(zip.id)
+            } else {
+                newSet.add(zip.id)
+            }
+
+            return newSet
+        })
+    }
     const handleDoubleClick = (zip: Zip) => {
         if (zip.isDir) {
-            setStack(stack => [...stack, zipList])
-            setZipList(zip.children!)
+            setStack(stack => [...stack, zip.parent!])
+            setZip(zip)
+            setSelected(new Set())
+
             return
         }
     }
     const handleBack = () => {
         let current = stack.pop()
 
-        setZipList(current!)
+        setZip(current)
         setStack([...stack])
+        setSelected(new Set([]))
     }
 
     useEffect(() => {
@@ -139,7 +183,7 @@ export default function ZipList() {
                         .then(ret => {
                             const data = JSON.parse(ret as string)
 
-                            format(data as ArchiveNode, setZipList)
+                            format(data as ArchiveNode, setZip)
                             console.log(data)
                         })
                         .catch(e => {
@@ -155,55 +199,60 @@ export default function ZipList() {
     }, [])
 
     return (
-        <ul className="zip-list">
-            <li className="zip-list-header">
-                <div className="file-name">Name</div>
-                <div className="file-last-modified">Date modified</div>
-                <div className="file-compressed-size">Compressed size</div>
-                <div className="file-size">Size</div>
-            </li>
-            {!!stack.length && (
-                <li>
+        <div className="zip">
+            <ul className="zip-header">
+                <li className="zip-path zip-item">
                     <button
                         onClick={handleBack}
-                        className="rounded bg-blue-500 text-white px-[10px] py-[5px] cursor-pointer hover:bg-blue-400 active:bg-blue-600 transition-colors"
+                        disabled={!stack.length}
+                        className="zip-back"
                     >
-                        Back
+                        <BackArrow />
                     </button>
+                    <input
+                        readOnly
+                        className="zip-path-input"
+                        value={zip?.path}
+                    />
                 </li>
-            )}
-            {zipList?.map(zip => {
-                let bg = zip.icon ? `url('/icons/${zip.icon}.svg')` : undefined
-
-                return (
+                <li className="zip-item">
+                    <div className="file-name">Name</div>
+                    <div className="file-last-modified">Date modified</div>
+                    <div className="file-compressed-size">Compressed size</div>
+                    <div className="file-size">Size</div>
+                </li>
+            </ul>
+            <ul className="zip-list">
+                {zip?.children.map(zip => (
                     <li
-                        key={zip.key}
-                        onClick={() => handleClick(zip)}
+                        key={zip.id}
+                        onClick={e => handleClick(e, zip)}
                         onDoubleClick={() => handleDoubleClick(zip)}
-                        className="zip-item"
+                        className={`zip-item ${selected.has(zip.id) ? "zip-item-selected" : ""}`}
                     >
                         {zip.isDir ? (
                             <div className="file-name">
-                                <span
-                                    className="folder-default-icon zip-icon"
-                                    style={{
-                                        backgroundImage: bg,
-                                    }}
-                                />
+                                <span className="folder-default-icon zip-icon" />
                                 {zip.name}
                             </div>
                         ) : (
                             <div className="file-name">
                                 <span
                                     className="file-default-icon zip-icon"
-                                    style={{ backgroundImage: bg }}
+                                    style={{
+                                        backgroundImage: zip.icon
+                                            ? `url('/icons/${zip.icon}.svg')`
+                                            : undefined,
+                                    }}
                                 />
-                                {zip.name}
+                                <span className="truncate" title={zip.name}>
+                                    {zip.name}
+                                </span>
                             </div>
                         )}
                     </li>
-                )
-            })}
-        </ul>
+                ))}
+            </ul>
+        </div>
     )
 }

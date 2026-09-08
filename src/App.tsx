@@ -13,7 +13,7 @@ window.invokeTauri = invoke
 
 function App() {
     return (
-        <main className="container">
+        <main>
             <ZipList />
         </main>
     )

@@ -35,6 +35,7 @@ impl Default for ArchiveNode {
             children: HashMap::new(),
             parent: Default::default(),
             ext: Default::default(),
+            full_path: Default::default(),
         }
     }
 }
@@ -61,10 +62,13 @@ struct ArchiveNode {
     #[serde(skip_serializing)]
     parent: Weak<RefCellNode>,
     ext: Option<String>,
+    full_path: String,
 }
 
 fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn Error>> {
-    let root = Rc::new(RefCell::new(ArchiveNode::from_name("root")));
+    let mut root = ArchiveNode::from_name("root");
+    root.full_path = String::from("/");
+    let root = Rc::new(RefCell::new(root));
     let file = File::open(file_path)?;
     let mut zip_file: ZipArchive<File> = ZipArchive::new(file)?;
     let len = zip_file.len();
@@ -87,14 +91,20 @@ fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn Erro
         let compressed_size = f.compressed_size();
         let last_modified = f.last_modified();
         let len = components.len();
+        let mut full_path = String::new();
 
         for (idx, c) in components.into_iter().enumerate() {
             let mut node = ArchiveNode::from_name(c);
             // for handling folders like __MACOSX
-            let is_last = idx == len - 1; 
+            let is_last = idx == len - 1;
             let is_file = is_last && !is_dir;
             node.is_dir = !is_last || is_dir;
             node.last_modified = format_date_time(last_modified);
+
+            full_path.push_str(&format!("/{c}"));
+
+            node.full_path = full_path.clone();
+
 
             if is_file {
                 node.size = size;
