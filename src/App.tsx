@@ -1,7 +1,9 @@
-import "./styles/tailwind.css";
-import "./styles/index.scss"
+import {MouseEvent} from "react"
 import { invoke } from "@tauri-apps/api/core"
 import ZipList from "./ZipList"
+
+import "./styles/tailwind.css"
+import "./styles/index.scss"
 
 declare global {
     interface Window {
@@ -12,8 +14,14 @@ declare global {
 window.invokeTauri = invoke
 
 function App() {
+    const preventCtxMenu = (e: MouseEvent) => {
+        if (!import.meta.env.DEV) {
+            e.preventDefault()
+        }
+    }
+
     return (
-        <main>
+        <main onContextMenu={preventCtxMenu}>
             <ZipList />
         </main>
     )

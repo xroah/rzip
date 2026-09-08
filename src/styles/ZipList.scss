@@ -15,6 +15,7 @@
 
     > div {
         width: 25%;
+        padding-left: 5px;
         -webkit-user-select: none;
         user-select: none;
     }
@@ -44,15 +45,17 @@
     }
 }
 
-.zip-path-input {
+.zip-path-details {
     flex-grow: 1;
     border: 1px solid #d1d5dc;
+    height: 28px;
     border-radius: 3px;
-    padding: 3px 5px;
+    padding: 0 5px;
     color: #666;
 }
 
-.zip-header,.zip-list {
+.zip-header,
+.zip-list {
     padding: 0 10px;
 }
 
@@ -62,6 +65,8 @@
     cursor: default;
 
     .zip-item {
+        border: 1px solid transparent;
+
         &:hover {
             background-color: #eee;
         }
@@ -73,10 +78,35 @@
         &:not(:last-child) {
             border-bottom: 1px solid #fafafa;
         }
+
+        &.zip-item-ctx-menu {
+            border: 1px solid #54a2ff;
+        }
     }
 
     .file-name {
         display: flex;
         align-items: center;
+    }
+}
+
+.zip-ctx-menu {
+    min-width: 100px;
+    background-color: rgba(255, 255, 255, .6);
+    backdrop-filter: blur(3px);
+    outline: none;
+    box-shadow: 0 0 5px 0 rgba(0, 0, 0, .3);
+}
+
+.zip-ctx-menu-item {
+    outline: none;
+    padding: 5px;
+    border-radius: 3px;
+    color: #333;
+    cursor: default;
+
+    &:hover {
+        background-color: #90c5ff;
+        color: #fff;
     }
 }

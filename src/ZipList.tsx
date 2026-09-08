@@ -2,154 +2,55 @@ import { useEffect, useState, MouseEvent } from "react"
 import { Event, listen, TauriEvent } from "@tauri-apps/api/event"
 import { invoke } from "@tauri-apps/api/core"
 import BackArrow from "./icons/backArrow"
+import { type Zip, format } from "./utils/zip"
+import { Button } from "@base-ui/react/button"
+import { ContextMenu } from "@base-ui/react/context-menu"
+import clsx from "clsx"
 
 interface Payload {
     paths: string[]
-}
-
-interface ArchiveNode {
-    name: string
-    is_dir: boolean
-    last_modified?: string
-    size: number
-    compressed_size: number
-    ext?: string
-    children: Record<string, ArchiveNode>
-    full_path: string
-}
-
-interface Zip {
-    name: string
-    isDir: boolean
-    modified?: string
-    size: string
-    compressedSize: string
-    icon?: string
-    children: Zip[]
-    id: number
-    parent?: Zip
-    path: string
-}
-
-type IconCodeMap = Record<number, string>
-type IconMap = Record<string, number>
-
-interface Manifest {
-    icon_map: IconMap
-    code_map: IconCodeMap
-}
-
-function formatSize(s: number) {
-    let ret = ""
-    const BASE = 1024
-    const units = ["B", "KB", "MB", "GB"]
-    const len = units.length
-    let i = 0
-
-    while (i < len) {
-        if (s < BASE) {
-            ret = s.toFixed(2)
-            break
-        }
-
-        s = s / BASE
-    }
-
-    return ret + units[i]
-}
-
-let id = 100
-
-function getIcon(
-    { icon_map, code_map }: Manifest,
-    { ext, name, is_dir }: ArchiveNode,
-) {
-    if (is_dir) {
-        return
-    }
-
-    let icon = icon_map[name]
-
-    if (!icon && ext) {
-        icon = icon_map[ext]
-    }
-
-    return icon ? code_map[icon] : undefined
-}
-
-function sort(zip1: Zip, zip2: Zip) {
-    return zip1.name > zip2.name ? 1 : zip1.name < zip2.name ? -1 : 0
-}
-
-async function format(archiveNode: ArchiveNode, cb: (zip: Zip) => void) {
-    let manifest = (await invoke("get_icon_manifest")) as Manifest
-    let ret: Zip = {
-        name: "root",
-        isDir: true,
-        size: "",
-        compressedSize: "",
-        icon: "",
-        modified: "",
-        id: 0,
-        children: [],
-        path: "/",
-    }
-    const fmt = (an: ArchiveNode, parent?: Zip) => {
-        let folders: Zip[] = []
-        let files: Zip[] = []
-        let children = an.children
-        let keys = Object.keys(children)
-
-        for (let k of keys) {
-            let node = children[k]
-            let zipNode: Zip = {
-                name: node.name,
-                isDir: true,
-                size: formatSize(node.size),
-                compressedSize: formatSize(node.compressed_size),
-                icon: getIcon(manifest, node),
-                modified: node.last_modified,
-                id: id++,
-                children: [],
-                parent,
-                path: node.full_path,
-            }
-
-            if (node.is_dir) {
-                folders.push(zipNode)
-                zipNode.children = fmt(node, zipNode)
-            } else {
-                zipNode.isDir = false
-
-                files.push(zipNode)
-            }
-        }
-
-        return [...folders.sort(sort), ...files.sort(sort)]
-    }
-
-    ret.children = fmt(archiveNode, ret)
-
-    cb(ret)
-    console.log(ret)
 }
 
 export default function ZipList() {
     const [zip, setZip] = useState<Zip>()
     const [stack, setStack] = useState<Zip[]>([])
     const [selected, setSelected] = useState<Set<number>>(new Set())
-    const handleClick = (e: MouseEvent, zip: Zip) => {
+    const [currentCtxMenuItem, setCurrentCtxMenuItem] = useState<
+        number | null
+    >()
+    const [ctxMenuOpen, setCtxMenuOpen] = useState(false)
+    const handleCtxMenuOpen = (open: boolean) => {
+        setCtxMenuOpen(open)
+
+        if (!open) {
+            setCurrentCtxMenuItem(null)
+        }
+    }
+    const handleClick = (e: MouseEvent, idx: number, zip: Zip) => {
+        e.stopPropagation()
+
+        if (e.metaKey && e.shiftKey) {
+            return
+        }
+
         setSelected(s => {
-            if (!e.ctrlKey) {
-                return new Set([zip.id])
-            }
+            let id = zip.id
 
             let newSet = new Set(s)
 
-            if (newSet.has(zip.id)) {
-                newSet.delete(zip.id)
+            if (e.metaKey) {
+                if (newSet.has(id)) {
+                    newSet.delete(id)
+                } else {
+                    newSet.add(id)
+                }
+            } else if (e.shiftKey) {
             } else {
-                newSet.add(zip.id)
+                if (newSet.has(id) && newSet.size === 1) {
+                    newSet = new Set()
+                } else {
+                    return new Set([id])
+                }
             }
 
             return newSet
@@ -163,6 +64,11 @@ export default function ZipList() {
 
             return
         }
+
+        setSelected(new Set([zip.id]))
+    }
+    const handleRootClick = () => {
+        setSelected(new Set())
     }
     const handleBack = () => {
         let current = stack.pop()
@@ -183,7 +89,7 @@ export default function ZipList() {
                         .then(ret => {
                             const data = JSON.parse(ret as string)
 
-                            format(data as ArchiveNode, setZip)
+                            format(data, setZip)
                             console.log(data)
                         })
                         .catch(e => {
@@ -199,21 +105,17 @@ export default function ZipList() {
     }, [])
 
     return (
-        <div className="zip">
+        <div className="zip" onClick={handleRootClick}>
             <ul className="zip-header">
                 <li className="zip-path zip-item">
-                    <button
+                    <Button
                         onClick={handleBack}
                         disabled={!stack.length}
                         className="zip-back"
                     >
                         <BackArrow />
-                    </button>
-                    <input
-                        readOnly
-                        className="zip-path-input"
-                        value={zip?.path}
-                    />
+                    </Button>
+                    <div className="zip-path-details">{zip?.path}</div>
                 </li>
                 <li className="zip-item">
                     <div className="file-name">Name</div>
@@ -222,37 +124,83 @@ export default function ZipList() {
                     <div className="file-size">Size</div>
                 </li>
             </ul>
-            <ul className="zip-list">
-                {zip?.children.map(zip => (
-                    <li
-                        key={zip.id}
-                        onClick={e => handleClick(e, zip)}
-                        onDoubleClick={() => handleDoubleClick(zip)}
-                        className={`zip-item ${selected.has(zip.id) ? "zip-item-selected" : ""}`}
-                    >
-                        {zip.isDir ? (
-                            <div className="file-name">
-                                <span className="folder-default-icon zip-icon" />
-                                {zip.name}
-                            </div>
-                        ) : (
-                            <div className="file-name">
-                                <span
-                                    className="file-default-icon zip-icon"
-                                    style={{
-                                        backgroundImage: zip.icon
-                                            ? `url('/icons/${zip.icon}.svg')`
-                                            : undefined,
-                                    }}
+            <ContextMenu.Root
+                open={ctxMenuOpen}
+                defaultOpen={false}
+                onOpenChange={handleCtxMenuOpen}
+            >
+                <ul className="zip-list">
+                    {zip?.children.map((zip, i) => (
+                        <ContextMenu.Trigger
+                            key={zip.id}
+                            render={
+                                <li
+                                    key={zip.id}
+                                    onClick={e => handleClick(e, i, zip)}
+                                    onDoubleClick={() => handleDoubleClick(zip)}
+                                    className={clsx("zip-item", {
+                                        "zip-item-selected": selected.has(
+                                            zip.id,
+                                        ),
+                                        "zip-item-ctx-menu":
+                                            currentCtxMenuItem === zip.id,
+                                    })}
                                 />
-                                <span className="truncate" title={zip.name}>
-                                    {zip.name}
-                                </span>
+                            }
+                            onContextMenu={e => {
+                                setCurrentCtxMenuItem(zip.id)
+                                console.log(e, "<<<<")
+                            }}
+                        >
+                            {zip.isDir ? (
+                                <div className="file-name">
+                                    <span className="folder-default-icon zip-icon" />
+                                    <span className="truncate" title={zip.name}>
+                                        {zip.name}
+                                    </span>
+                                </div>
+                            ) : (
+                                <div className="file-name">
+                                    <span
+                                        className="file-default-icon zip-icon"
+                                        style={{
+                                            backgroundImage: zip.icon
+                                                ? `url('/icons/${zip.icon}.svg')`
+                                                : undefined,
+                                        }}
+                                    />
+                                    <span className="truncate" title={zip.name}>
+                                        {zip.name}
+                                    </span>
+                                </div>
+                            )}
+                            <div className="file-last-modified truncate">
+                                {zip.modified}
                             </div>
-                        )}
-                    </li>
-                ))}
-            </ul>
+                            <div className="file-compressed-size truncate">
+                                {zip.compressedSize}
+                            </div>
+                            <div className="file-size truncate">{zip.size}</div>
+                        </ContextMenu.Trigger>
+                    ))}
+                </ul>
+
+                <ContextMenu.Portal>
+                    <ContextMenu.Positioner sideOffset={4}>
+                        <ContextMenu.Popup className="zip-ctx-menu rounded-[5px] p-[5px]">
+                            <ContextMenu.Item className="zip-ctx-menu-item">
+                                Open
+                            </ContextMenu.Item>
+                            <ContextMenu.Item className="zip-ctx-menu-item">
+                                Rename
+                            </ContextMenu.Item>
+                            <ContextMenu.Item className="zip-ctx-menu-item">
+                                Delete
+                            </ContextMenu.Item>
+                        </ContextMenu.Popup>
+                    </ContextMenu.Positioner>
+                </ContextMenu.Portal>
+            </ContextMenu.Root>
         </div>
     )
 }

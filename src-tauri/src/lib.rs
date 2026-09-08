@@ -1,5 +1,7 @@
 use std::{fs, path::PathBuf};
 
+use tauri::{LogicalSize, Manager, Size};
+
 mod icon;
 mod js_api;
 mod zip;
@@ -17,6 +19,18 @@ pub fn run() {
     }
 
     tauri::Builder::default()
+        .setup(|app| {
+            let Some(main_window) = app.get_webview_window("main") else {
+                return Ok(());
+            };
+
+            main_window.set_min_size(Some(Size::Logical(LogicalSize {
+                width: 800f64,
+                height: 600f64,
+            })))?;
+
+            Ok(())
+        })
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             js_api::get_zip_json,
