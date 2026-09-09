@@ -10,8 +10,8 @@
 
 .zip-item {
     display: flex;
-    padding: 5px 0;
     align-items: center;
+    min-height: 36px;
 
     > div {
         width: 25%;
@@ -46,11 +46,13 @@
 }
 
 .zip-path-details {
+    display: flex;
+    align-items: center;
     flex-grow: 1;
     border: 1px solid #d1d5dc;
     height: 28px;
+    line-height: 1;
     border-radius: 3px;
-    padding: 0 5px;
     color: #666;
 }
 
@@ -72,15 +74,15 @@
         }
 
         &.zip-item-selected {
-            background-color: #90c5ff;
+            background-color: #bedbff;
         }
 
         &:not(:last-child) {
-            border-bottom: 1px solid #fafafa;
+            border-bottom-color: #fafafa;
         }
 
         &.zip-item-ctx-menu {
-            border: 1px solid #54a2ff;
+            border-color: #54a2ff;
         }
     }
 
@@ -92,10 +94,10 @@
 
 .zip-ctx-menu {
     min-width: 100px;
-    background-color: rgba(255, 255, 255, .6);
+    background-color: rgba(255, 255, 255, 0.6);
     backdrop-filter: blur(3px);
     outline: none;
-    box-shadow: 0 0 5px 0 rgba(0, 0, 0, .3);
+    box-shadow: 0 0 5px 0 rgba(0, 0, 0, 0.3);
 }
 
 .zip-ctx-menu-item {

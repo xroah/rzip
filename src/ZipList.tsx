@@ -1,4 +1,4 @@
-import { useEffect, useState, MouseEvent } from "react"
+import { useEffect, useState, MouseEvent, useRef } from "react"
 import { Event, listen, TauriEvent } from "@tauri-apps/api/event"
 import { invoke } from "@tauri-apps/api/core"
 import BackArrow from "./icons/backArrow"
@@ -6,6 +6,8 @@ import { type Zip, format } from "./utils/zip"
 import { Button } from "@base-ui/react/button"
 import { ContextMenu } from "@base-ui/react/context-menu"
 import clsx from "clsx"
+import CtxMenu from "./CtxMenu"
+import Filename from "./Filename"
 
 interface Payload {
     paths: string[]
@@ -15,15 +17,22 @@ export default function ZipList() {
     const [zip, setZip] = useState<Zip>()
     const [stack, setStack] = useState<Zip[]>([])
     const [selected, setSelected] = useState<Set<number>>(new Set())
+    const [editingItems, setEditingItems] = useState<Set<number>>(new Set())
     const [currentCtxMenuItem, setCurrentCtxMenuItem] = useState<
         number | null
     >()
+    const rootRef = useRef<HTMLDivElement>(null)
     const [ctxMenuOpen, setCtxMenuOpen] = useState(false)
     const handleCtxMenuOpen = (open: boolean) => {
         setCtxMenuOpen(open)
 
         if (!open) {
             setCurrentCtxMenuItem(null)
+        }
+    }
+    const removeEditingItems = () => {
+        if (editingItems.size) {
+            setEditingItems(new Set())
         }
     }
     const handleClick = (e: MouseEvent, idx: number, zip: Zip) => {
@@ -33,28 +42,28 @@ export default function ZipList() {
             return
         }
 
-        setSelected(s => {
-            let id = zip.id
+        let id = zip.id
 
-            let newSet = new Set(s)
+        let newSet = new Set(selected)
 
-            if (e.metaKey) {
-                if (newSet.has(id)) {
-                    newSet.delete(id)
-                } else {
-                    newSet.add(id)
-                }
-            } else if (e.shiftKey) {
+        if (e.metaKey) {
+            if (newSet.has(id)) {
+                newSet.delete(id)
             } else {
-                if (newSet.has(id) && newSet.size === 1) {
-                    newSet = new Set()
-                } else {
-                    return new Set([id])
-                }
+                newSet.add(id)
             }
+        } else if (e.shiftKey) {
+        } else {
+            if (newSet.has(id) && newSet.size === 1) {
+                newSet = new Set()
+            } else {
+                newSet = new Set([id])
 
-            return newSet
-        })
+                removeEditingItems()
+            }
+        }
+
+        setSelected(newSet)
     }
     const handleDoubleClick = (zip: Zip) => {
         if (zip.isDir) {
@@ -67,8 +76,15 @@ export default function ZipList() {
 
         setSelected(new Set([zip.id]))
     }
-    const handleRootClick = () => {
-        setSelected(new Set())
+    const handleRootClick = (e: MouseEvent) => {
+        let t = e.target as HTMLElement
+
+        // prevent from triggering if context menu items were clicked
+        if (rootRef.current == t || rootRef.current?.contains(t)) {
+            selected.size && setSelected(new Set())
+        }
+
+        removeEditingItems()
     }
     const handleBack = () => {
         let current = stack.pop()
@@ -76,6 +92,19 @@ export default function ZipList() {
         setZip(current)
         setStack([...stack])
         setSelected(new Set([]))
+    }
+    const handleRename = (name: string, path: string) => {
+        setZip(zip => {
+            zip!.children = zip!.children.map(item => {
+                if (item.path === path) {
+                    item.name = name
+                }
+
+                return item
+            })
+
+            return { ...zip } as Zip
+        })
     }
 
     useEffect(() => {
@@ -105,7 +134,12 @@ export default function ZipList() {
     }, [])
 
     return (
-        <div className="zip" onClick={handleRootClick}>
+        <div
+            className="zip"
+            tabIndex={-1}
+            ref={rootRef}
+            onClick={handleRootClick}
+        >
             <ul className="zip-header">
                 <li className="zip-path zip-item">
                     <Button
@@ -147,33 +181,20 @@ export default function ZipList() {
                                     })}
                                 />
                             }
-                            onContextMenu={e => {
-                                setCurrentCtxMenuItem(zip.id)
-                                console.log(e, "<<<<")
-                            }}
+                            onContextMenu={() => setCurrentCtxMenuItem(zip.id)}
                         >
-                            {zip.isDir ? (
-                                <div className="file-name">
-                                    <span className="folder-default-icon zip-icon" />
-                                    <span className="truncate" title={zip.name}>
-                                        {zip.name}
-                                    </span>
-                                </div>
-                            ) : (
-                                <div className="file-name">
-                                    <span
-                                        className="file-default-icon zip-icon"
-                                        style={{
-                                            backgroundImage: zip.icon
-                                                ? `url('/icons/${zip.icon}.svg')`
-                                                : undefined,
-                                        }}
-                                    />
-                                    <span className="truncate" title={zip.name}>
-                                        {zip.name}
-                                    </span>
-                                </div>
-                            )}
+                            <Filename
+                                name={zip.name}
+                                icon={zip.icon}
+                                path={zip.path}
+                                isDir={zip.isDir}
+                                onDone={removeEditingItems}
+                                onRename={handleRename}
+                                isEditing={
+                                    editingItems.size === 1 &&
+                                    editingItems.has(zip.id)
+                                }
+                            />
                             <div className="file-last-modified truncate">
                                 {zip.modified}
                             </div>
@@ -185,21 +206,19 @@ export default function ZipList() {
                     ))}
                 </ul>
 
-                <ContextMenu.Portal>
-                    <ContextMenu.Positioner sideOffset={4}>
-                        <ContextMenu.Popup className="zip-ctx-menu rounded-[5px] p-[5px]">
-                            <ContextMenu.Item className="zip-ctx-menu-item">
-                                Open
-                            </ContextMenu.Item>
-                            <ContextMenu.Item className="zip-ctx-menu-item">
-                                Rename
-                            </ContextMenu.Item>
-                            <ContextMenu.Item className="zip-ctx-menu-item">
-                                Delete
-                            </ContextMenu.Item>
-                        </ContextMenu.Popup>
-                    </ContextMenu.Positioner>
-                </ContextMenu.Portal>
+                <CtxMenu
+                    menuItems={[
+                        {
+                            name: "Open",
+                        },
+                        {
+                            name: "Rename",
+                        },
+                        {
+                            name: "Delete",
+                        },
+                    ]}
+                />
             </ContextMenu.Root>
         </div>
     )
