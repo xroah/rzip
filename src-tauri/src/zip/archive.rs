@@ -105,7 +105,6 @@ fn get_zip_structure(file_path: PathBuf) -> Result<Rc<RefCellNode>, Box<dyn Erro
 
             node.full_path = full_path.clone();
 
-
             if is_file {
                 node.size = size;
                 node.compressed_size = compressed_size;
